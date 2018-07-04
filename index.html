@@ -58,6 +58,7 @@
         // 开始场景 and play
         created: function() {
             this.create = function() {
+                this.dead = false;
                 this.bg = game.add.image(0, -128,'bg');
                 this.bg.width = game.world.width;
                 this.bg.height = game.world.height;
@@ -65,6 +66,11 @@
                 this.pipes = game.add.group();
                 //設置重複纹理
                 this.ground = game.add.tileSprite(0, game.world.height - 128, game.world.width, game.world.height, 'ground');
+                //score
+                this.score = game.add.text(20, 20, '0', {
+                    fontSize: '40px',
+                    fill: '#fff',
+                });
 
                 //設置鳥兒
                 this.bird = game.add.sprite(150, game.world.centerY - 100, 'bird');
@@ -81,13 +87,57 @@
             },
             this.update = function() {
                 //設置地板速度
-                this.ground.tilePosition.x += 3;
+                if ( ! this.dead ) {
+                    this.ground.tilePosition.x += 3;
+                }
+
+                if ( this.bird.body.y >= 768 ) {
+                    this.deadSet(this);
+                }
 
                 //開始
                 if ( start ) {
-                    if (this.bird.angle < 20)
+                    if (this.bird.angle < 20) {
                         this.bird.angle += 1;
+                    }
+
+                    //break!
+                    game.physics.arcade.overlap(this.bird, this.pipes, this.hitPipe, null, this);
                 }
+            },
+            this.hitPipe = function() {
+                this.deadSet(this);
+            },
+            this.deadSet = function() {
+                //dead stop
+                this.dead = true;
+
+                //stop pipes
+                game.time.events.remove(this.timer);
+                this.pipes.forEach(function (p){
+                    p.body.velocity.x = 0;
+                });
+
+                //show restart and score
+                var showScore = game.add.text(game.world.centerX, game.world.centerY - 100, 'Your score: ' + this.score.text, {
+                    fontSize: '60px',
+                    fill: '#fff',
+                });
+                showScore.anchor.set(0.5);
+                showScore.alpha = 0;
+                game.add.tween(showScore).to( { alpha: 1 }, 2000, Phaser.Easing.Linear.None, true, 0, 1000, true);
+                //show restart
+                this.restart = game.add.tileSprite(game.world.centerX, game.world.centerY, 214, 75, 'restart');
+                this.restart.anchor.setTo(0.5, 0.5);
+                this.restart.alpha = 0;
+                //set to input
+                this.restart.inputEnabled = true;
+                game.add.tween(this.restart).to( { alpha: 1 }, 2000, Phaser.Easing.Linear.None, true, 0, 1000, true);
+                this.restart.events.onInputDown.add(this.restartGame, this);
+            },
+            this.restartGame = function() {
+                start = false;
+                game.state.restart();
             },
             this.jump = function() {
                 if ( ! start ) {
@@ -99,16 +149,22 @@
                     this.timer = game.time.events.loop(1500, this.addRowOfPipes, this);
                 }
 
-                // Create an animation on the bird
-                birdAngle = game.add.tween(this.bird).to({angle: -20}, 100).start();
-                //跳躍鳥角度改變
-                this.bird.body.velocity.y = -500;
+                if ( ! this.dead ) {
+                    // Create an animation on the bird
+                    birdAngle = game.add.tween(this.bird).to({angle: -20}, 100).start();
+                    //跳躍鳥角度改變
+                    this.bird.body.velocity.y = -500;
+                }
             },
             this.addRowOfPipes = function() {
+                this.score.text = parseInt(this.score.text) + 1;
                 var y = this.randomY();
-                var pipeBot = game.add.sprite(562, y, 'pipe');
-                var pipeTop = game.add.sprite(700, y - 200, 'pipe');
+                var pipeBot = game.add.sprite(626, y, 'pipe');
+                var pipeTop = game.add.sprite(700, y - 620, 'pipe');
+                // 设置锚点，用于居中
                 pipeTop.angle = 180;
+                pipeTop.anchor.setTo(0.5, 0.5);
+
                 // Add the pipe to our previously created group
                 this.pipes.add(pipeBot);
                 this.pipes.add(pipeTop);
