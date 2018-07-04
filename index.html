@@ -3,6 +3,8 @@
 <head>
     <title>phaser</title>
     <script src="https://cdn.bootcss.com/phaser/2.6.2/phaser.min.js"></script>
+    <script src="http://127.0.0.1:8081/socket.io/socket.io.js"></script>
+    <script src="js/client.js"></script>
     <style type="text/css">
         canvas {
             margin: auto;
@@ -15,9 +17,12 @@
 </div>
 </body>
 <script type="text/javascript">
+    var Client = {};
+    Client.socket = io.connect('http://127.0.0.1:8081');
     var width = 768;
     var height = 896;
     var start = false;
+    var selfId = 0;
     //create game
     var game = new Phaser.Game(width, height, Phaser.AUTO, '#game');
     var config = {
@@ -70,7 +75,10 @@
         // 开始场景 and play
         created: function() {
             this.create = function() {
+                var $this = this;
+                this.bird = [];
                 this.dead = false;
+                this.startSocket(this);
                 this.bg = game.add.image(0, -128,'bg');
                 this.bg.width = game.world.width;
                 this.bg.height = game.world.height;
@@ -78,24 +86,24 @@
                 this.pipes = game.add.group();
                 //設置重複纹理
                 this.ground = game.add.tileSprite(0, game.world.height - 128, game.world.width, game.world.height, 'ground');
+                this.addNewBird(selfId, this);
+
                 //score
                 this.score = game.add.text(20, 20, '0', {
                     fontSize: '40px',
                     fill: '#fff',
                 });
 
-                //設置鳥兒
-                this.bird = game.add.sprite(150, game.world.centerY - 100, 'bird');
-                this.bird.animations.add('fly');
-                this.bird.animations.play('fly', 10, true);
-                //Needed for: movements, gravity, collisions, etc.
-                game.physics.arcade.enable(this.bird);
-                //設置簡單動畫
-                birdTween = game.add.tween(this.bird).to({ y: game.world.centerY - 150 }, 500, Phaser.Easing.Quadratic.InOut, true, 0, 1000, true);
-                birdTween.start();
-
                 //點擊開始 到jump 跟 傳入this
-                game.input.onDown.add(this.jump, this);
+                game.input.onDown.add(function() {
+                   $this.jump(selfId, $this);
+                });
+            },
+            this.startSocket = function() {
+                var _this = this;
+                Client.socket.on('createBird',function(data){
+                    _this.addNewBird(data.id, _this);
+                });
             },
             this.update = function() {
                 //設置地板速度
@@ -103,18 +111,21 @@
                     this.ground.tilePosition.x += config.groundSpeed;
                 }
 
-                if ( this.bird.body.y >= 768 ) {
+                //自己
+                if ( this.bird[selfId].body.y >= 768 ) {
                     this.deadSet(this);
                 }
 
                 //開始
                 if ( start ) {
-                    if (this.bird.angle < 20) {
-                        this.bird.angle += 1;
-                    }
+                    this.bird.forEach(function (p){
+                        if (p.angle < 20) {
+                            p.angle += 1;
+                        }
+                    });
 
                     //break!
-                    game.physics.arcade.overlap(this.bird, this.pipes, this.hitPipe, null, this);
+                    game.physics.arcade.overlap(this.bird[selfId], this.pipes, this.hitPipe, null, this);
                 }
             },
             this.hitPipe = function() {
@@ -123,13 +134,6 @@
             this.deadSet = function() {
                 //dead stop
                 this.dead = true;
-
-                //stop pipes
-                game.time.events.remove(this.timer);
-                this.pipes.forEach(function (p){
-                    p.body.velocity.x = 0;
-                });
-
                 //show restart and score
                 var showScore = game.add.text(game.world.centerX, game.world.centerY - 100, 'Your score: ' + this.score.text, {
                     fontSize: '60px',
@@ -151,25 +155,29 @@
                 start = false;
                 game.state.restart();
             },
-            this.jump = function() {
+            this.jump = function(id) {
+                console.log(start);
                 if ( ! start ) {
                     start = true;
                     //暫停動畫
                     birdTween.pause();
                     //給個重力
-                    this.bird.body.gravity.y = config.birdGravity;
+                    this.bird[id].body.gravity.y = config.birdGravity;
                     this.timer = game.time.events.loop(config.pipesShowSpeed, this.addRowOfPipes, this);
                 }
 
                 if ( ! this.dead ) {
                     // Create an animation on the bird
-                    birdAngle = game.add.tween(this.bird).to({angle: -20}, 100).start();
+                    birdAngle = game.add.tween(this.bird[id]).to({angle: -20}, 100).start();
                     //跳躍鳥角度改變
-                    this.bird.body.velocity.y = -500;
+                    this.bird[id].body.velocity.y = -500;
                 }
             },
             this.addRowOfPipes = function() {
-                this.score.text = parseInt(this.score.text) + 1;
+                if ( ! this.dead ) {
+                    this.score.text = parseInt(this.score.text) + 1;
+                }
+
                 var y = this.randomY();
                 var pipeBot = game.add.sprite(626, y, 'pipe');
                 var pipeTop = game.add.sprite(700, y - config.pipesTopAndBotSpace, 'pipe');
@@ -196,6 +204,17 @@
             },
             this.randomY = function() {
                 return Math.floor(Math.random()*(600-250+1))+250;
+            },
+            this.addNewBird = function(id) {
+                //設置鳥兒
+                this.bird[id] = game.add.sprite(150, game.world.centerY - 100, 'bird');
+                this.bird[id].animations.add('fly');
+                this.bird[id].animations.play('fly', 10, true);
+                //Needed for: movements, gravity, collisions, etc.
+                game.physics.arcade.enable(this.bird[id]);
+                //設置簡單動畫
+                birdTween = game.add.tween(this.bird[id]).to({ y: game.world.centerY - 150 }, 500, Phaser.Easing.Quadratic.InOut, true, 0, 1000, true);
+                birdTween.start();
             }
         },
         // 结束场景
