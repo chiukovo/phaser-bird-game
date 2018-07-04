@@ -29,6 +29,8 @@
         pipesShowSpeed: 1500,
         //管子速度
         pipesSpeed: -350,
+        //上下管子間距
+        pipesTopAndBotSpace: 600,
     };
     //定义场景
     var states = {
@@ -170,7 +172,7 @@
                 this.score.text = parseInt(this.score.text) + 1;
                 var y = this.randomY();
                 var pipeBot = game.add.sprite(626, y, 'pipe');
-                var pipeTop = game.add.sprite(700, y - 620, 'pipe');
+                var pipeTop = game.add.sprite(700, y - config.pipesTopAndBotSpace, 'pipe');
                 // 设置锚点，用于居中
                 pipeTop.angle = 180;
                 pipeTop.anchor.setTo(0.5, 0.5);
